@@ -1,6 +1,6 @@
 {
   "name": "forest-tea-game", "version": "0.1.0", "private": true,
   "scripts": { "dev": "next dev --hostname 0.0.0.0 --port 3100", "build": "next build", "start": "node scripts/start.mjs", "test": "tsx --test tests/*.test.ts", "typecheck": "tsc --noEmit" },
-  "dependencies": { "next": "16.3.4", "react": "19.2.8", "react-dom": "19.2.8", "lucide-react": "^0.577.0", "react-qr-code": "^2.0.18", "firebase-admin": "14.3.0" },
+  "dependencies": { "next": "16.3.4", "react": "19.2.8", "react-dom": "19.2.8", "lucide-react": "^0.577.0", "react-qr-code": "^2.0.18", "firebase-admin": "14.3.0", "@opentelemetry/api": "1.9.0" },
   "devDependencies": { "typescript": "^5.9.3", "@types/node": "^24.10.0", "@types/react": "^19.2.0", "@types/react-dom": "^19.2.0", "tsx": "^4.21.0", "@playwright/test": "^1.58.2" }
 }
