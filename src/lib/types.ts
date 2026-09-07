@@ -1,0 +1,17 @@
+export type Feature = 'afternoon' | 'company' | 'discount' | 'takeaway';
+export type Label = 0 | 1;
+export type Method = 'tree' | 'bagging' | 'forest';
+export type Phase = 'waiting' | Method | 'boosting' | 'final' | 'reflection' | 'ended';
+export type Order = { id: string; name: string; features: Record<Feature, boolean>; label: Label };
+export type TreeChoices = { root: Feature; left?: Feature; right?: Feature };
+export type TreeNode = { feature?: Feature; prediction: Label; count: number; yesCount: number; left?: TreeNode; right?: TreeNode };
+export type Offers = { root: Feature[]; left: Feature[]; right: Feature[] };
+export type Candidate = { id: string; feature: Feature; tree: TreeNode; error: number };
+export type BoostRound = { index: number; weights: number[]; candidates: Candidate[]; selected?: Candidate; epsilon?: number; alpha?: number; perfect?: boolean; stopped?: boolean };
+export type Player = { id: string; name: string; avatar: number; joinedAt: number; tokenHash: string; sampleIds: string[]; offers: Offers; trees: Partial<Record<Method, TreeNode>>; choices: Partial<Record<Method, TreeChoices>>; proposals: Record<string, string>; answers?: number[]; demo?: boolean };
+export type ResultRow = { name: string; correct: number; total: number; modelCount: number; predictions: Label[] };
+export type Room = { code: string; ownerHash: string; createdAt: number; revision: number; phase: Phase; round: number; open: boolean; revealed: boolean; duration: 'full' | 'short'; endsAt: number | null; remainingMs: number; seed: number; players: Record<string, Player>; boosts: BoostRound[]; results?: ResultRow[]; testOrders?: Order[] };
+export type PublicPlayer = { id: string; name: string; avatar: number; submitted: boolean; demo?: boolean };
+export type RoomView = { code: string; phase: Phase; round: number; revision: number; open: boolean; revealed: boolean; duration: 'full' | 'short'; endsAt: number | null; remainingMs: number; serverTime: number; storage: 'local' | 'firebase'; players: PublicPlayer[]; submitted: number; teacher: boolean; train: Order[]; me?: Omit<Player, 'tokenHash'>; boost?: BoostRound; boosts?: BoostRound[]; proposalCounts?: Record<string, number>; results?: ResultRow[]; testOrders?: Order[]; showcase?: {name: string; tree: TreeNode}[]; observation?: {order: Order; yes: number; no: number}; reflections?: { answered: number; correct: number[] }; };
+export type Credentials = { token: string; playerId?: string };
+export type RoomAction = { action: 'advance' | 'close' | 'reveal' | 'pause' | 'resume' | 'addTime' | 'end' | 'demo' | 'reset' } | { action: 'tree'; choices: TreeChoices; revision: number } | { action: 'proposal'; candidateId: string; revision: number } | { action: 'answers'; answers: number[]; revision: number };

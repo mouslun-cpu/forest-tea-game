@@ -1,0 +1,9 @@
+node_modules
+.next
+.git
+.data
+.env*
+artifacts
+test-results
+*.bak.*
+home-desktop.png
