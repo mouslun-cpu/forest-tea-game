@@ -7,10 +7,21 @@ import type { BoostRound, Label, Order, TreeNode } from '../src/lib/types';
 const card = (id: string, label: Label, afternoon = false, company = false): Order => ({ id, name: id, label, features: { afternoon, company, discount: false, takeaway: false } });
 const close = (actual: number, expected: number) => assert.ok(Math.abs(actual - expected) < 1e-10, `${actual} ≠ ${expected}`);
 
+test('生活案例依餓或想吃甜食產生答案；單層樹有正反預測', () => {
+  for (const order of [...TRAIN_ORDERS, ...OBSERVATION_ORDERS, ...TEST_ORDERS]) {
+    assert.equal(order.label, order.features.afternoon || order.features.company ? 1 : 0);
+  }
+  assert.equal(new Set(TRAIN_ORDERS.map(o => [o.features.afternoon, o.features.company, o.features.discount].join(','))).size, 8);
+  const tree = autoTree(TRAIN_ORDERS, 1, false, 1);
+  assert.equal(tree.left?.feature, undefined);
+  assert.equal(tree.right?.feature, undefined);
+  assert.deepEqual(new Set(TRAIN_ORDERS.map(o => predict(tree, o))), new Set([0, 1]));
+});
+
 test('抽樣有放回、長度相同，固定種子重現相同袋子', () => {
   const sample = bootstrap(TRAIN_ORDERS, 20260907);
-  assert.equal(sample.length, 24);
-  assert.ok(new Set(sample.map(o => o.id)).size < 24);
+  assert.equal(sample.length, TRAIN_ORDERS.length);
+  assert.ok(new Set(sample.map(o => o.id)).size < TRAIN_ORDERS.length);
   assert.deepEqual(sample, bootstrap(TRAIN_ORDERS, 20260907));
   assert.deepEqual(bootstrap([], 1), []);
 });
@@ -75,15 +86,20 @@ test('投票僅計已提供模型；平票依指定fallback，複製同樹不改
   assert.equal(vote(Array(20).fill(yes), order), predict(yes, order));
 });
 
+const boostRows: Order[] = Array.from({ length: 24 }, (_, i) => {
+  const n = i % 8;
+  return { id: `boost-${i}`, name: `boost-${i}`, features: { afternoon: !!(n & 1), company: !!(n & 2), discount: !!(n & 4), takeaway: i >= 8 && i < 16 }, label: Number(!!(n & 1)) + Number(!!(n & 2)) + Number(!!(n & 4)) >= 2 ? 1 : 0 };
+});
+
 test('AdaBoost第一輪手算ε=1/4；錯題總權重升至1/2，正確卡仍保留', () => {
-  const initial = createBoostRound(TRAIN_ORDERS);
+  const initial = createBoostRound(boostRows);
   assert.equal(initial.candidates.length, 4);
-  const { round, nextWeights } = finishBoostRound(initial, TRAIN_ORDERS);
+  const { round, nextWeights } = finishBoostRound(initial, boostRows);
   assert.equal(round.selected?.feature, 'afternoon');
   close(round.epsilon!, 1 / 4);
   close(round.alpha!, 0.5 * Math.log(3));
   close(nextWeights.reduce((a, b) => a + b, 0), 1);
-  TRAIN_ORDERS.forEach((o, i) => close(nextWeights[i], predict(round.selected!.tree, o) === o.label ? 1 / 36 : 1 / 12));
+  boostRows.forEach((o, i) => close(nextWeights[i], predict(round.selected!.tree, o) === o.label ? 1 / 36 : 1 / 12));
 });
 
 test('每輪候選葉子由當輪權重多数決，非未加權張數', () => {
@@ -107,13 +123,13 @@ test('完美弱模型提前完成、避免無限alpha；無有效弱模型停止
 });
 
 test('題庫分離、三輪有效模型與封存評估由即時計算得出', () => {
-  assert.deepEqual([TRAIN_ORDERS.length, OBSERVATION_ORDERS.length, TEST_ORDERS.length], [24, 6, 12]);
+  assert.deepEqual([TRAIN_ORDERS.length, OBSERVATION_ORDERS.length, TEST_ORDERS.length], [8, 6, 6]);
   const ids = [...TRAIN_ORDERS, ...OBSERVATION_ORDERS, ...TEST_ORDERS].map(o => o.id);
   assert.equal(new Set(ids).size, ids.length);
   const rounds: BoostRound[] = [];
   let weights: number[] | undefined;
   for (let index = 0; index < 3; index++) {
-    const finished = finishBoostRound(createBoostRound(TRAIN_ORDERS, weights, index), TRAIN_ORDERS);
+    const finished = finishBoostRound(createBoostRound(boostRows, weights, index), boostRows);
     assert.ok(finished.round.epsilon! > 0 && finished.round.epsilon! < 0.5);
     rounds.push(finished.round);
     weights = finished.nextWeights;
@@ -121,7 +137,7 @@ test('題庫分離、三輪有效模型與封存評估由即時計算得出', ()
   assert.equal(new Set(rounds.map(r => r.selected?.feature)).size, 3);
   const before = JSON.stringify(rounds);
   const results = evaluateBoost('接力', rounds, TEST_ORDERS);
-  assert.equal(results.total, 12);
+  assert.equal(results.total, TEST_ORDERS.length);
   assert.equal(results.modelCount, 3);
   assert.equal(results.correct, TEST_ORDERS.filter((o, i) => o.label === results.predictions[i]).length);
   const changedLabels = TEST_ORDERS.map(o => ({ ...o, label: (1 - o.label) as Label }));

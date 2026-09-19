@@ -1,7 +1,7 @@
 import type { Feature, Phase } from './types';
 export const featureInfo: Record<Feature, { label: string; question: string; yes: string; no: string; icon: string }> = {
-  afternoon: { label: '下午茶', question: '是下午茶時段嗎？', yes: '下午茶時段', no: '其他時段', icon: '☀️' },
-  company: { label: '同行人數', question: '有人一起買嗎？', yes: '結伴來買', no: '一個人來', icon: '👫' },
+  afternoon: { label: '肚子餓', question: '客人肚子餓嗎？', yes: '肚子餓了', no: '剛吃飽', icon: '🍽️' },
+  company: { label: '想吃甜食', question: '客人想吃甜食嗎？', yes: '想吃甜食', no: '不想吃甜食', icon: '🍰' },
   discount: { label: '套餐優惠', question: '有套餐折扣嗎？', yes: '有套餐折扣', no: '沒有折扣', icon: '🎟️' },
   takeaway: { label: '內用外帶', question: '要外帶嗎？', yes: '外帶回家', no: '留在店裡', icon: '🛍️' },
 };
@@ -19,3 +19,9 @@ export const questions = [
   { text: '哪種方法，要等前一輪結果才能調整學習重點？', options: ['Bagging：分頭學習', 'Boosting：循序糾錯'], answer: 1, explanation: 'Boosting 的後一輪會根據前面的結果，補上新的模型。' },
   { text: '隨機森林，究竟隨機在哪裡？', options: ['抽訂單，以及每次分岔考慮的線索', '每位客人的答案隨便猜'], answer: 0, explanation: '抽樣是隨機的，判斷仍然要根據資料。' },
 ];
+export const stagesFor = (duration: 'short' | 'full') => duration === 'full' ? stages : [
+  { ...stages[0], name: '選一個問題', subtitle: '你是店長。看舊紀錄，預測客人會不會加點心。', note: '請說：你是店長，不是來點餐的客人。選一個問題，系統會依舊紀錄的多數答案做出規則。先選、看預覽，再送出。' },
+  { ...stages[2], name: '全班一起投票', subtitle: '換一袋紀錄、選一個問題，讓不同的樹一起猜。', note: '每人抽到不同紀錄與兩個候選問題。每棵樹依自己的規則出一票，再採多數決。這是只長一層、由人選問題的森林體驗；真正模型會自動選分岔。' },
+];
+export const questionsFor = (duration: 'short' | 'full') => duration === 'full' ? questions : [questions[0],
+  { text: '5 棵樹裡，3 棵猜會加點心、2 棵猜不會。森林猜什麼？', options: ['不會加點心', '會加點心'], answer: 1, explanation: '每棵樹一票，森林採多數決，所以是 3 票的「會加點心」。' }, questions[2]];

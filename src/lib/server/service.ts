@@ -11,8 +11,9 @@ const hash = (token: string) => createHash('sha256').update(token).digest('hex')
 const newToken = () => randomBytes(32).toString('base64url');
 const methods: Method[] = ['tree', 'bagging', 'forest'];
 const phases: Phase[] = ['waiting', 'tree', 'bagging', 'forest', 'boosting', 'final', 'reflection', 'ended'];
+const shortPhases: Phase[] = ['waiting', 'tree', 'forest', 'final', 'reflection', 'ended'];
 const fullTimes = [3, 6, 7, 8, 3, 4, 3, 0];
-const shortTimes = [2, 4, 4, 5, 2, 2, 2, 0];
+const shortTimes = [2, 3, 0, 4, 0, 3, 3, 0];
 const expiresMs = 7 * 24 * 60 * 60 * 1000;
 
 function codeOf(code: string) {
@@ -53,7 +54,8 @@ function fillDemos(room: Room) {
     if (methods.includes(room.phase as Method) && !player.trees[room.phase as Method]) {
       const method = room.phase as Method;
       const index = player.avatar % FEATURES.length;
-      const choices = method === 'forest' ? { root: player.offers.root[0], left: player.offers.left[1], right: player.offers.right[0] } : { root: FEATURES[index].key, left: FEATURES[(index + 1) % FEATURES.length].key, right: FEATURES[(index + 2) % FEATURES.length].key };
+      const choices: TreeChoices = method === 'forest' ? { root: player.offers.root[0], left: player.offers.left[1], right: player.offers.right[0] } : { root: FEATURES[index].key, left: FEATURES[(index + 1) % FEATURES.length].key, right: FEATURES[(index + 2) % FEATURES.length].key };
+      if (room.duration === 'short') { delete choices.left; delete choices.right; }
       player.choices[method] = choices;
       player.trees[method] = buildTree(method === 'tree' ? TRAIN_ORDERS : sample(player), choices, method === 'forest' ? player.offers : undefined);
     }
@@ -82,6 +84,17 @@ function finalize(room: Room) {
   const players = Object.values(room.players).sort((a, b) => a.joinedAt - b.joinedAt || a.id.localeCompare(b.id));
   const single = players.find(p => !p.demo && p.trees.tree) || players.find(p => p.trees.tree);
   const trees = (method: Method) => players.flatMap(p => p.trees[method] ? [p.trees[method]!] : []);
+  if (room.duration === 'short') {
+    const forest = Array.from({ length: 5 }, (_, i) => autoTree(bootstrap(TRAIN_ORDERS, room.seed + i), room.seed + i, true, 1));
+    room.testOrders = TEST_ORDERS;
+    room.results = [
+      evaluate(`手作單樹 · ${single?.name || '未提交'}`, single?.trees.tree ? [single.trees.tree] : [], TEST_ORDERS),
+      evaluate('全班手作森林', trees('forest'), TEST_ORDERS),
+      evaluate('系統示範 · 單樹', [autoTree(TRAIN_ORDERS, room.seed, false, 1)], TEST_ORDERS),
+      evaluate('系統示範 · 隨機森林', forest, TEST_ORDERS),
+    ];
+    return;
+  }
   const bag = Array.from({ length: 5 }, (_, i) => autoTree(bootstrap(TRAIN_ORDERS, room.seed + i), room.seed + i, false));
   const forest = Array.from({ length: 5 }, (_, i) => autoTree(bootstrap(TRAIN_ORDERS, room.seed + i), room.seed + i, true));
   const autoBoost = [];
@@ -151,6 +164,7 @@ function toView(room: Room, credentials: Credentials, storage: RoomStore['kind']
 
 export async function createRoom(input: unknown, store = getStore()) {
   const body = object(input);
+  if (body.duration === undefined) body.duration = 'short';
   if (body.duration !== 'full' && body.duration !== 'short') fail(400, '請選擇完整或精簡課程。');
   if (body.demo !== undefined && typeof body.demo !== 'boolean') fail(400, '示範設定格式不正確。');
   const token = newToken();
@@ -209,6 +223,7 @@ export async function act(code: string, credentials: Credentials, input: unknown
         if (!methods.includes(room.phase as Method)) fail(409, '現在不是建立規則的階段。');
         const method = room.phase as Method;
         const choices = object(body.choices);
+        if (room.duration === 'short' && (choices.left !== undefined || choices.right !== undefined)) fail(400, '入門課每棵樹只選一個問題。');
         for (const slot of ['root', 'left', 'right'] as const) {
           if (slot !== 'root' && choices[slot] === undefined) continue;
           if (!FEATURES.some(f => f.key === choices[slot])) fail(400, '請選擇有效的線索。');
@@ -254,7 +269,10 @@ export async function act(code: string, credentials: Credentials, input: unknown
           room.remainingMs = (room.duration === 'full' ? 3 : 2) * 60000;
           room.endsAt = Date.now() + room.remainingMs;
           fillDemos(room);
-        } else setPhase(room, phases[phases.indexOf(room.phase) + 1]);
+        } else {
+          const sequence = room.duration === 'short' ? shortPhases : phases;
+          setPhase(room, sequence[sequence.indexOf(room.phase) + 1]);
+        }
         break;
       }
       default: fail(400, '不支援這個操作。');

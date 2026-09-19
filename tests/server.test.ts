@@ -18,6 +18,52 @@ async function act(code: string, credentials: Credentials, input: Record<string,
   return rawAct(code, credentials, {revision, ...input}, store);
 }
 
+test('default introductory lesson uses one-question trees and keeps new answers sealed', async () => {
+  const { store, clean } = await fixture();
+  try {
+    const owner = await createRoom({ demo: true }, store);
+    const learner = await joinRoom(owner.code, { name: '小安', avatar: 0 }, store);
+    let view = await viewRoom(owner.code, owner, store);
+    assert.equal(view.duration, 'short');
+    const visited = [view.phase];
+    for (const phase of ['tree', 'forest'] as const) {
+      view = await act(owner.code, owner, { action: 'advance' }, store) as RoomView;
+      visited.push(view.phase);
+      assert.equal(view.phase, phase);
+      const mine = await viewRoom(owner.code, learner, store);
+      const root = phase === 'forest' ? mine.me!.offers.root[0] : 'afternoon';
+      await rejects(act(owner.code, learner, { action: 'tree', choices: { root, left: 'company' } }, store), 400);
+      await rejects(act(owner.code, learner, { action: 'tree', choices: { root, right: 'company' } }, store), 400);
+      const saved = await act(owner.code, learner, { action: 'tree', choices: { root } }, store) as RoomView;
+      assert.equal(saved.me!.trees[phase]!.left?.feature, undefined);
+      assert.equal(saved.me!.trees[phase]!.right?.feature, undefined);
+      for (const credentials of [owner, learner, publicIdentity]) {
+        const hidden = await viewRoom(owner.code, credentials, store);
+        assert.equal(hidden.testOrders, undefined);
+        assert.equal(hidden.results, undefined);
+      }
+    }
+    view = await act(owner.code, owner, { action: 'advance' }, store) as RoomView;
+    visited.push(view.phase);
+    assert.equal(view.phase, 'final');
+    assert.equal(view.testOrders, undefined);
+    assert.equal(view.results, undefined);
+    view = await act(owner.code, owner, { action: 'reveal' }, store) as RoomView;
+    assert.equal(view.testOrders?.length, 6);
+    assert.equal(view.results?.length, 4);
+    assert.ok(view.results?.every(row => !/Bagging|AdaBoost/.test(row.name) && row.total === 6));
+    assert.equal(view.results?.[0].name, '手作單樹 · 小安');
+    assert.equal(view.boosts?.length, 0);
+    view = await act(owner.code, owner, { action: 'advance' }, store) as RoomView;
+    visited.push(view.phase);
+    await act(owner.code, learner, { action: 'answers', answers: [1, 1, 0] }, store);
+    view = await act(owner.code, owner, { action: 'advance' }, store) as RoomView;
+    visited.push(view.phase);
+    assert.deepEqual(visited, ['waiting', 'tree', 'forest', 'final', 'reflection', 'ended']);
+    assert.deepEqual(view.reflections, { answered: 1, correct: [1, 1, 1] });
+  } finally { await clean(); }
+});
+
 test('duplicate teacher transitions cannot skip a stage', async () => {
   const {store, clean} = await fixture();
   try {
@@ -26,7 +72,7 @@ test('duplicate teacher transitions cannot skip a stage', async () => {
     const revision = (await viewRoom(owner.code,owner,store)).revision;
     const outcomes = await Promise.allSettled([0,1].map(()=>rawAct(owner.code,owner,{action:'advance',revision},store)));
     assert.equal(outcomes.filter(o=>o.status==='fulfilled').length,1);
-    assert.equal((await viewRoom(owner.code,owner,store)).phase,'bagging');
+    assert.equal((await viewRoom(owner.code,owner,store)).phase,'forest');
     await rejects(rawAct(owner.code,owner,{action:'end'},store),409);
   } finally { await clean(); }
 });
@@ -37,7 +83,7 @@ test('60 concurrent joins and submissions are durable and share one phase revisi
     const owner = await createRoom({ duration: 'short' }, store);
     const players = await Promise.all(Array.from({ length: 60 }, (_, i) => joinRoom(owner.code, { name: `店長${i}`, avatar: i % 6 }, store)));
     const started = await act(owner.code, owner, { action: 'advance' }, store) as RoomView;
-    await Promise.all(players.map(player => act(owner.code, player, { action: 'tree', revision: started.revision, choices: { root: 'company', left: 'discount' } }, store)));
+    await Promise.all(players.map(player => act(owner.code, player, { action: 'tree', revision: started.revision, choices: { root: 'company' } }, store)));
     const view = await viewRoom(owner.code, owner, new LocalStore(directory));
     assert.equal(view.submitted, 60);
     assert.equal(view.players.length, 60);
@@ -98,7 +144,7 @@ test('authorization, private player models, hidden holdout and forest constraint
 test('full demonstration completes three boosting rounds, reveals only on demand, freezes end and resets separately', async () => {
   const { store, clean } = await fixture();
   try {
-    const owner = await createRoom({ duration: 'short', demo: true }, store);
+    const owner = await createRoom({ duration: 'full', demo: true }, store);
     const learner = await joinRoom(owner.code, { name: '測試同學', avatar: 0 }, store);
     let view = await viewRoom(owner.code, owner, store);
     while (view.phase !== 'boosting') view = await act(owner.code, owner, { action: 'advance' }, store) as RoomView;
@@ -122,8 +168,8 @@ test('full demonstration completes three boosting rounds, reveals only on demand
     view = await act(owner.code, owner, { action: 'advance' }, store) as RoomView;
     assert.equal(view.phase, 'reflection');
     assert.equal(view.results?.length, 8);
-    assert.equal(view.testOrders?.length, 12);
-    assert.ok(view.results?.every(row => row.total === 12));
+    assert.equal(view.testOrders?.length, 6);
+    assert.ok(view.results?.every(row => row.total === 6));
     assert.equal(view.results?.filter(row => row.name.startsWith('系統示範')).length, 4);
     await rejects(act(owner.code, learner, { action: 'answers', revision: view.revision, answers: [2, 1, 0] }, store), 400);
     await act(owner.code, learner, { action: 'answers', revision: view.revision, answers: [1, 1, 0] }, store);

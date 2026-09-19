@@ -23,7 +23,8 @@ async function snapshot(page: Page, name: string) {
 }
 async function reveal(teacher: Page) {
   await teacher.getByRole('button', { name: '收件並揭曉', exact: true }).click();
-  await teacher.getByRole('dialog').getByRole('button', { name: '確定', exact: true }).click();
+  const dialog = teacher.getByRole('dialog');
+  if (await dialog.isVisible()) await dialog.getByRole('button', { name: '確定', exact: true }).click();
   await expect(teacher.getByText('已揭曉', { exact: true })).toBeVisible();
 }
 async function join(context: BrowserContext, code: string, name: string) {
@@ -54,7 +55,7 @@ async function build(page: Page, method: 'tree' | 'bagging' | 'forest', reloadDr
   await page.getByRole('button', { name: '看看我的小樹', exact: true }).click();
   await mobileFits(page);
   await page.getByRole('button', { name: '鎖定我的小樹' }).click();
-  await expect(page.getByText('規則已交給店長！', { exact: true })).toBeVisible();
+  await expect(page.getByText('你的規則已送出！', { exact: true })).toBeVisible();
 }
 
 test('teacher, two mobile students and public display complete a private, synchronized lesson', async () => {
@@ -69,6 +70,7 @@ test('teacher, two mobile students and public display complete a private, synchr
   try {
     const teacher = await teacherContext.newPage();
     await teacher.goto(`${origin}/teacher`);
+    await teacher.getByText('進階 · 加入 Bagging 與錯題接力').click();
     await teacher.getByRole('button', { name: /開店，產生邀請 QR/ }).click();
     await expect(teacher).toHaveURL(/\/teacher\/[A-Z0-9]{6}$/);
     const code = teacher.url().split('/').at(-1)!;
@@ -102,7 +104,7 @@ test('teacher, two mobile students and public display complete a private, synchr
       await snapshot(studentA, `03-mobile-${method}`);
       const saved = (await roomView(studentA, code, 'player')).me!;
       await studentA.reload();
-      await expect(studentA.getByText('規則已交給店長！', { exact: true })).toBeVisible();
+      await expect(studentA.getByText('你的規則已送出！', { exact: true })).toBeVisible();
       const resumed = (await roomView(studentA, code, 'player')).me!;
       expect(resumed.id).toBe(saved.id);
       expect(resumed.trees[method]).toEqual(saved.trees[method]);
@@ -143,7 +145,7 @@ test('teacher, two mobile students and public display complete a private, synchr
     await teacher.getByRole('button', { name: '揭曉封存題成績', exact: true }).click();
     await expect(studentA.getByText('新客人的答案揭曉了！', { exact: true })).toBeVisible();
     const results = await roomView(display, code);
-    expect(results.testOrders).toHaveLength(12);
+    expect(results.testOrders).toHaveLength(6);
     expect(results.results).toHaveLength(8);
     expect(results.results!.filter(row => row.name.startsWith('系統示範'))).toHaveLength(4);
     await mobileFits(studentA);

@@ -1,9 +1,9 @@
 import type { BoostRound, Feature, Label, Offers, Order, ResultRow, TreeChoices, TreeNode } from './types';
 
 export const FEATURES: { key: Feature; label: string; yes: string; no: string; icon: string }[] = [
-  { key: 'afternoon', label: '下午茶時段', yes: '下午茶', no: '其他時段', icon: '☀️' },
-  { key: 'company', label: '多人同行', yes: '多人同行', no: '自己來', icon: '👥' },
-  { key: 'discount', label: '套餐折扣', yes: '有折扣', no: '無折扣', icon: '🎟️' },
+  { key: 'afternoon', label: '肚子餓嗎？', yes: '肚子餓', no: '不餓', icon: '🍽️' },
+  { key: 'company', label: '想吃甜食嗎？', yes: '想吃甜食', no: '不想吃甜食', icon: '🍰' },
+  { key: 'discount', label: '有折扣嗎？', yes: '有折扣', no: '無折扣', icon: '🎟️' },
   { key: 'takeaway', label: '外帶', yes: '外帶', no: '內用', icon: '🥤' },
 ];
 
@@ -67,11 +67,11 @@ export function vote(trees: TreeNode[], order: Order, fallback: Label = 0): Labe
   return sum === 0 ? fallback : sum > 0 ? 1 : 0;
 }
 
-export function autoTree(orders: Order[], seed: number, randomFeatures: boolean): TreeNode {
+export function autoTree(orders: Order[], seed: number, randomFeatures: boolean, maxDepth = 2): TreeNode {
   const offers = featureOffers(seed);
   function build(rows: Order[], depth: number, slot: keyof Offers, fallback: Label): TreeNode {
     const node = leaf(rows, fallback);
-    if (depth >= 2 || !rows.length || node.yesCount === 0 || node.yesCount === rows.length) return node;
+    if (depth >= maxDepth || !rows.length || node.yesCount === 0 || node.yesCount === rows.length) return node;
     const candidates = randomFeatures ? offers[slot] : FEATURES.map(f => f.key);
     let best: { feature: Feature; left: Order[]; right: Order[]; score: number } | undefined;
     for (const feature of candidates) {
